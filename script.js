@@ -4,7 +4,7 @@ function generateReportsFromSheet() {
   const sheet = SpreadsheetApp.openById("14OJQ0tORMrO1RKu_dZV16y2DYg8SQE9U3aZpuk4DBVY").getSheets()[0];
   const data = sheet.getDataRange().getValues();
 
-  for (let i = 1; i < data.length; i++) { // Skip header row
+  for (let i = 1; i < data.length; i++) {
     const row = data[i];
 
     const timestamp = row[0];
@@ -20,7 +20,7 @@ function generateReportsFromSheet() {
     const prompt = `
 You are an expert AI trained in SACPCMP professional registration assessments. You have access to the Candidate Self-Assessment Framework (2025) and the full example report: https://github.com/216062607/gggggg/blob/main/Feedback%20Report%20for%20Selebaleng%20%20Ndwandwe%20Rev02.pdf.
 
-Your task is to generate a professional feedback report identical in structure and tone to the one above, based on the candidate’s responses.
+Your task is to generate a professional feedback report identical in structure, tone, and table format to the one above, based on the candidate’s responses.
 
 Candidate Name: ${candidateName}
 
@@ -45,20 +45,21 @@ ${stage6Response}
 
 Output Requirements:
 - Start with a “General Feedback” section.
-- Then for each project stage, include:
+- Then for each project stage, produce a table with:
   • Areas of Challenge  
   • Indicative Period to Address Gaps  
   • Recommended Training Resources  
   • Recommended Practical Experience  
   • Evaluation Method  
   • Additional Comments
-- End each section with “General Comments for Stage X” similar to the example report.
-
-Output must be formal, detailed, and formatted in structured plain text (no HTML).
+- Follow with a paragraph titled "General Comments for Stage X"
+- Repeat this table structure for each of the 6 stages
+- Match the layout and format of the Word document template exactly
+- Use structured plain text (no HTML)
 `;
 
     const aiGeneratedResponse = callGeminiAPI(prompt);
-    const pdfBlob = generatePDF(candidateName, aiGeneratedResponse);
+    const pdfBlob = generatePDFUsingTemplate(candidateName, aiGeneratedResponse);
 
     MailApp.sendEmail({
       to: "lewokwetsi@gmail.com",
@@ -104,34 +105,18 @@ function callGeminiAPI(userPrompt) {
   }
 }
 
-function generatePDF(candidateName, reportText) {
+function generatePDFUsingTemplate(candidateName, reportText) {
   const folderName = "Candidate Feedback Reports";
   const folders = DriveApp.getFoldersByName(folderName);
   const folder = folders.hasNext() ? folders.next() : DriveApp.createFolder(folderName);
 
-  const doc = DocumentApp.create(`Feedback Report for ${candidateName}`);
+  const templateId = "10nk0JsSCuBmgJZGqNF8hpXOwaqr858i0lDl6uY1AbsE"; // replace with actual ID from uploaded docx
+  const template = DriveApp.getFileById(templateId).makeCopy(`Feedback Report for ${candidateName}`);
+  const doc = DocumentApp.openById(template.getId());
   const body = doc.getBody();
 
-  // Insert logo
-  const logoFile = DriveApp.getFilesByName("-PREd---logo copy.png");
-  if (logoFile.hasNext()) {
-    const blob = logoFile.next().getBlob();
-    body.appendImage(blob).setWidth(150);
-  }
-
-  body.appendParagraph(`Feedback Report for ${candidateName}`).setHeading(DocumentApp.ParagraphHeading.HEADING1);
-  body.appendParagraph("Generated: " + new Date().toLocaleDateString());
-
-  const lines = reportText.split("\n");
-  for (let line of lines) {
-    if (line.trim() === "") {
-      body.appendParagraph("");
-    } else if (line.startsWith("# ")) {
-      body.appendParagraph(line.replace("# ", "")).setHeading(DocumentApp.ParagraphHeading.HEADING2);
-    } else {
-      body.appendParagraph(line);
-    }
-  }
+  body.replaceText("{{CandidateName}}", candidateName);
+  body.replaceText("{{ReportContent}}", reportText);
 
   doc.saveAndClose();
   const file = DriveApp.getFileById(doc.getId());
@@ -139,5 +124,3 @@ function generatePDF(candidateName, reportText) {
   folder.createFile(pdf);
   return pdf;
 }
-
-
